@@ -1,0 +1,325 @@
+#!/bin/bash
+
+# --------------------------------------------
+# Script de setup completo para Penguin On The Way
+# --------------------------------------------
+
+echo "Actualizando sistema..."
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y python3 python3-venv python3-pip nginx git
+
+# -----------------------------
+# Crear carpeta de la app
+# -----------------------------
+APP_DIR=~/penguin_app
+echo "Creando carpeta de la app en $APP_DIR..."
+mkdir -p $APP_DIR
+cd $APP_DIR
+
+# -----------------------------
+# Crear entorno virtual y dependencias
+# -----------------------------
+echo "Creando entorno virtual..."
+python3 -m venv venv
+source venv/bin/activate
+
+echo "Instalando dependencias de Python..."
+pip install --upgrade pip
+pip install flask pymysql boto3 gunicorn python-dotenv
+
+# -----------------------------
+# Crear estructura de la app
+# -----------------------------
+mkdir -p templates
+
+# Archivo de variables de entorno
+ENV_FILE=.env
+echo "Creando archivo de variables de entorno..."
+cat > $ENV_FILE <<EOL
+RDS_ENDPOINT=potw-rds.cdca2if3ppwp.us-east-1.rds.amazonaws.com
+RDS_USER=admin
+RDS_PASSWORD=Admin1234
+RDS_DB=penguindb
+SNS_TOPIC_ARN=arn:aws:sns:us-east-1:462889659833:POTW-Notifications
+AWS_DEFAULT_REGION=us-east-1
+EOL
+
+# app.py
+echo "Creando archivo Flask app.py..."
+cat > app.py <<'EOL'
+import os
+import json
+import pymysql
+import boto3
+from flask import Flask, request, jsonify, render_template
+from dotenv import load_dotenv
+
+load_dotenv()
+
+app = Flask(__name__)
+
+RDS_ENDPOINT = os.environ['RDS_ENDPOINT']
+RDS_USER = os.environ['RDS_USER']
+RDS_PASSWORD = os.environ['RDS_PASSWORD']
+RDS_DB = os.environ['RDS_DB']
+SNS_TOPIC_ARN = os.environ['SNS_TOPIC_ARN']
+
+# Conexión a RDS (puede fallar si no está en la red VPC)
+try:
+    conn = pymysql.connect(host=RDS_ENDPOINT, user=RDS_USER, password=RDS_PASSWORD, db=RDS_DB)
+except Exception as e:
+    print("No se pudo conectar a RDS:", e)
+    conn = None
+
+sns = boto3.client('sns')
+
+if conn:
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS formulario (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                nombre VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL,
+                departamento ENUM('IT','RRHH','Comercial','Logística','Marketing') NOT NULL,
+                asunto VARCHAR(255) NOT NULL,
+                descripcion TEXT NOT NULL,
+                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/submit', methods=['POST'])
+def submit_form():
+    data = request.json
+    required_fields = ['nombre','email','departamento','asunto','descripcion']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({"error": f"Falta el campo {field}"}), 400
+
+    if conn:
+        with conn.cursor() as cur:
+            sql = """
+                INSERT INTO formulario (nombre,email,departamento,asunto,descripcion)
+                VALUES (%s,%s,%s,%s,%s)
+            """
+            cur.execute(sql, (data['nombre'], data['email'], data['departamento'], data['asunto'], data['descripcion']))
+            conn.commit()
+    sns.publish(TopicArn=SNS_TOPIC_ARN, Message=json.dumps(data))
+    return jsonify({"message": "Datos recibidos y notificación enviada"}), 200
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8000)
+EOL
+
+# templates/index.html
+echo "Creando templates/index.html..."
+cat > templates/index.html <<'EOL'
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Penguin On The Way! - Ticket</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #74ebd5, #9face6);
+}
+
+.container {
+    width: 100%;
+    max-width: 420px;
+    padding: 20px;
+}
+
+.card {
+    background: white;
+    padding: 30px;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    animation: fadeIn 0.6s ease-in-out;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+label {
+    display: block;
+    margin-top: 12px;
+    font-weight: 600;
+    color: #555;
+}
+
+input, select, textarea {
+    width: 100%;
+    padding: 10px;
+    margin-top: 5px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    transition: 0.2s;
+}
+
+input:focus, select:focus, textarea:focus {
+    border-color: #6c63ff;
+    outline: none;
+    box-shadow: 0 0 5px rgba(108,99,255,0.4);
+}
+
+textarea {
+    resize: none;
+}
+
+button {
+    width: 100%;
+    margin-top: 20px;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: #6c63ff;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+button:hover {
+    background: #574fd6;
+    transform: translateY(-2px);
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+@keyframes fadeIn {
+    from {opacity: 0; transform: translateY(20px);}
+    to {opacity: 1; transform: translateY(0);}
+}
+</style>
+
+</head>
+<body>
+
+<div class="container">
+    <div class="card">
+        <h1>Penguin On The Way!</h1>
+
+        <form id="formulario">
+            <label>Nombre</label>
+            <input type="text" name="nombre" required>
+
+            <label>Email</label>
+            <input type="email" name="email" required>
+
+            <label>Departamento</label>
+            <select name="departamento" required>
+                <option value="IT">IT</option>
+                <option value="RRHH">RRHH</option>
+                <option value="Comercial">Comercial</option>
+                <option value="Logística">Logística</option>
+                <option value="Marketing">Marketing</option>
+            </select>
+
+            <label>Asunto</label>
+            <input type="text" name="asunto" required>
+
+            <label>Descripción</label>
+            <textarea name="descripcion" rows="4" required></textarea>
+
+            <button type="submit">Enviar</button>
+        </form>
+    </div>
+</div>
+
+<script>
+const form = document.getElementById('formulario');
+form.addEventListener('submit', async e=>{
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form).entries());
+    const response = await fetch('/submit',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(data)
+    });
+    const result = await response.json();
+    alert(result.message || JSON.stringify(result));
+    form.reset();
+});
+</script>
+
+</body>
+</html>
+EOL
+
+# -----------------------------
+# Configurar Gunicorn como servicio systemd
+# -----------------------------
+echo "Creando servicio systemd para Gunicorn..."
+SERVICE_FILE=/etc/systemd/system/penguin.service
+sudo bash -c "cat > $SERVICE_FILE" <<EOL
+[Unit]
+Description=Penguin On The Way Flask App
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=$APP_DIR
+EnvironmentFile=/home/ubuntu/penguin_app/.env
+ExecStart=$APP_DIR/venv/bin/gunicorn -w 4 -b 127.0.0.1:8000 app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+sudo systemctl daemon-reload
+sudo systemctl enable penguin.service
+sudo systemctl start penguin.service
+
+# -----------------------------
+# Configurar Nginx
+# -----------------------------
+echo "Configurando Nginx como reverse proxy..."
+NGINX_FILE=/etc/nginx/sites-available/penguin
+sudo bash -c "cat > $NGINX_FILE" <<EOL
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOL
+
+sudo ln -sf /etc/nginx/sites-available/penguin /etc/nginx/sites-enabled/penguin
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl restart nginx
+
+echo "----------------------------------"
+echo "Setup completo!"
+echo "Penguin on the way estará disponible en http://<IP-de-ALB>/"
+echo "Gunicorn arranca automáticamente al iniciar la máquina."

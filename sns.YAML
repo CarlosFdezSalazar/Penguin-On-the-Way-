@@ -1,0 +1,25 @@
+# Plantilla usada como referencia: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-sns-topic.html
+
+# SNS Topic para notificaciones
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Despliegue de SNS
+
+Resources:
+  AppSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: "POTW-Notifications"
+
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: penguinontheway.test@gmail.com
+      TopicArn: !Ref AppSNSTopic
+
+Outputs:
+  SNSTopicArn:
+    Value: !Ref AppSNSTopic
+    Export:
+      Name: POTW-SNSTopicArn
