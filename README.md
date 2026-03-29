@@ -103,16 +103,16 @@ SNS
 
 ## 📂 Estructura del proyecto
 
-├── network-stack.yaml
-├── security-groups.yaml
-├── vpc-endpoint.yaml
-├── data-stack.yaml
-├── sns.yaml
-├── app-stack.yaml
-├── script-bash-ami-potw
-├── script-bash-ami-potw-explicado
-├── diagrama-POTW.io
-└── README.md
+- network-stack.yaml
+- security-groups.yaml
+- vpc-endpoint.yaml
+- data-stack.yaml
+- sns.yaml 
+- app-stack.yaml  
+- script-bash-ami-potw
+- script-bash-ami-potw-explicado  
+- diagrama-POTW.io
+- README.md
 
 
 ---
