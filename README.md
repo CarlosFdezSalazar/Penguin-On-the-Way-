@@ -1,6 +1,6 @@
 # 🐧 Penguin On The Way!
 
-Proyecto de arquitectura cloud en AWS orientado a demostrar competencias en **Cloud Architecture y DevOps**, mediante el despliegue completo de una aplicación web en una infraestructura escalable, resiliente y segura.
+Proyecto de arquitectura cloud en AWS orientado a demostrar competencias en **Cloud Architecture**, mediante el despliegue completo de una aplicación web en una infraestructura escalable, resiliente y segura.
 
 ---
 
