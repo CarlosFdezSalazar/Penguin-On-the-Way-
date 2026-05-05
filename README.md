@@ -179,5 +179,5 @@ La AMI utilizada en el Auto Scaling Group se genera a partir de un script que in
 
 ## 👨‍💻 Autor
 
-Proyecto desarrollado por Carlos Fernández como práctica de **Cloud Architecture & DevOps**, enfocado a demostrar habilidades reales en entornos AWS.
+Proyecto desarrollado por Carlos Fernández como práctica de **Cloud Architecture**, enfocado a demostrar habilidades reales en entornos AWS.
 
