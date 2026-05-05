@@ -1,0 +1,93 @@
+# Plantilla usada como referencia: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-ec2-securitygroup.html
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Security Groups para Penguin On The Way! (ALB, EC2, RDS, Lambda, SNS)
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Description: Nombre del entorno (prefijo para los recursos)
+  
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC donde se van a crear los Security Groups
+
+
+Resources:
+
+  # Security Group del Application Load Balancer
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${EnvironmentName}-ALB-SG"
+      GroupDescription: "Permite trafico HTTP hacia ALB"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 0
+          CidrIp: 0.0.0.0/0
+
+  # Security Group de las EC2 (Auto Scaling)
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${EnvironmentName}-EC2-SG"
+      GroupDescription: "Permite trafico desde ALB y salida a RDS/SNS/Internet"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 0
+          CidrIp: 0.0.0.0/0
+  
+  
+  # Security Group de RDS
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${EnvironmentName}-RDS-SG"
+      GroupDescription: "Permite trafico solo desde EC2"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306   
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 0
+          CidrIp: 0.0.0.0/0  # Permite replicación y backups si RDS los necesita
+
+
+
+Outputs:
+  ALBSecurityGroupId:
+    Description: Security Group ID del ALB
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub "${EnvironmentName}-ALBSecurityGroupId"
+
+  EC2SecurityGroupId:
+    Description: Security Group ID de EC2
+    Value: !Ref EC2SecurityGroup
+    Export:
+      Name: !Sub "${EnvironmentName}-EC2SecurityGroupId"
+
+  RDSSecurityGroupId:
+    Description: Security Group ID de RDS
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub "${EnvironmentName}-RDSSecurityGroupId"
+

@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Stack de capa de datos de Penguin On The Way! (RDS MySQL, Security Group)
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Description: Prefijo para los recursos
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC donde se desplegara la base de datos
+
+  PrivateDataSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets privadas donde se desplegara RDS
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security Group de RDS importado desde el stack de SG
+
+  DBName:
+    Type: String
+    Default: penguindb
+    Description: Nombre de la base de datos
+
+  DBUsername:
+    Type: String
+    Default: admin
+    Description: Usuario administrador de la base de datos
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: Password del usuario administrador
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    Description: Tipo de instancia de la base de datos
+
+  AllocatedStorage:
+    Type: Number
+    Default: 20
+    Description: Almacenamiento en GB
+
+Resources:
+
+  # Subnet Group para RDS
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "Subnets privadas para RDS ${EnvironmentName}"
+      SubnetIds: !Ref PrivateDataSubnets
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-RDS-SubnetGroup"
+
+  # Base de datos RDS MySQL
+  MyRDS:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub "${EnvironmentName}-RDS"
+      AllocatedStorage: !Ref AllocatedStorage
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: mysql
+      EngineVersion: 8.0
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBName: !Ref DBName
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      PubliclyAccessible: false
+      MultiAZ: true
+      StorageType: gp2
+      DeletionProtection: false
+      BackupRetentionPeriod: 7
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-RDS"
+
+Outputs:
+  RDSEndpoint:
+    Description: Endpoint de la base de datos
+    Value: !GetAtt MyRDS.Endpoint.Address
+    Export:
+      Name: !Sub "${EnvironmentName}-RDSEndpoint"
+
+  RDSSecurityGroupId:
+    Description: Security Group de RDS
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub "${EnvironmentName}-RDSSG"
